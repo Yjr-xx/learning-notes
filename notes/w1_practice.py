@@ -1,6 +1,7 @@
 # W1 练习：认识 tensor（张量）
-# 运行方式（在 D:/邵攀/遥感AI入门 目录下）：
-#   .venv/Scripts/python.exe w1_practice.py
+# 运行方式：必须用项目 .venv 里那个 Python，不要用机器上其他 Python。
+#   D:\邵攀\遥感AI入门\.venv\Scripts\python.exe w1_practice.py
+# （VS Code 里：Ctrl+Shift+P → Python: Select Interpreter → 选上面这个路径）
 
 import torch
 
