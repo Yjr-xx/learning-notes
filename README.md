@@ -38,7 +38,8 @@ notes/        每周笔记（W1-W24）
 |---|---|
 | `code/w2/train_cifar10.py` | CIFAR-10 手写训练循环（不依赖训练框架），实测验证准确率 53.10% |
 | `code/w2/练习.py` | Python 六项语法练习，六关全通过 |
-| `code/w2/scores.csv` | 上者的产出（读 CSV → 排序 → 加等级列 → 写 CSV） |
+| `code/w2/原始成绩.csv` | 上面练习的输入（6 行成绩） |
+| `code/w2/scores.csv` | 上面练习的产出（读 CSV → 排序 → 加等级列 → 写 CSV） |
 | `code/w2/loss.csv` | CIFAR-10 三轮训练的 loss / 准确率记录 |
 | `code/w2/loss_curve.txt` | 终端 ASCII loss 曲线（不依赖 matplotlib） |
 | `code/w2/detect.py` | YOLO 目标检测脚本（W3 使用） |
