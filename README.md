@@ -32,6 +32,7 @@ notes/        每周笔记（W1-W24）
 | `notes/w2-cifar10训练循环.md` | **手写训练循环四步原理**（前向/损失/反向/更新）+ 实测 53.10% + 四个坑 |
 | `notes/w2-l20五项补做.md` | L20 服务器五项实操：建目录/传代码/建环境/tmux/断线重连，含实机环境差异 |
 | `notes/w3-star精读.md` | STAR 精读：数据集八个数、MR/mMR/HMR 指标口径、CAC 三级、消融关键数、OBB 对比 |
+| `notes/w3-faster-rcnn对比.md` | 单阶段 vs 两阶段六项自述、Faster R-CNN 五步、四个必须懂的词、失败案例三条、遥感 OBB 差异 |
 
 ## 代码
 
