@@ -2,33 +2,24 @@
 # -*- coding: utf-8 -*-
 """
 CIFAR-10 图像分类 · 手写训练循环
-================================================================
-对应：老师基础清单 1.3「最低任务」/ 学习路线 W2（上周遗留项）
 
-这个脚本的全部意义在于：**不调用任何训练框架，自己把四步写出来**
+不调用任何训练框架，把四步显式写出来：
     前向 forward → 算损失 loss → 反向传播 backward → 更新参数 step
-用 ultralytics / timm 那种一行 fit() 的写法，学不到这四步。
 
-跑法（用项目自己的解释器）：
-    cd D:\\邵攀\\遥感AI入门
-    .\\.venv\\Scripts\\python.exe W3-20261110\\01-cifar10\\train_cifar10.py
+用法：
+    python train_cifar10.py
+    python train_cifar10.py --epochs 1 --train-size 512 --test-size 256   # 快速验证链路
+    python train_cifar10.py --epochs 3                                    # 正式跑
 
-快速验证（1 分钟左右，先确认脚本能跑通再开长跑）：
-    .\\.venv\\Scripts\\python.exe W3-20261110\\01-cifar10\\train_cifar10.py --epochs 1 --train-size 512 --test-size 256
-
-正式跑（CPU 上约 8-15 分钟）：
-    .\\.venv\\Scripts\\python.exe W3-20261110\\01-cifar10\\train_cifar10.py --epochs 3
-
-产出（都在 --out 目录下）：
+产出（均在 --out 目录下）：
     loss.csv          每轮的 train_loss / val_loss / val_acc
-    loss_curve.txt    ASCII 曲线，直接 cat 就能看
-    model.pt          权重（state_dict）
-    最后会加载 model.pt 重新测一遍，证明"保存 + 加载"真的能用
+    loss_curve.txt    ASCII 曲线
+    model.pt          权重（state_dict），训练结束会重新加载再测一遍
 
-为什么默认只用数据子集：
-    你的机器是 AMD 780M 核显，torch 是 CPU 版（cuda.is_available() == False）。
-    全量 50000 张在 CPU 上要跑很久，而这张卡上"跑得慢"学不到任何额外的东西。
-    用 8000 张验证四步对不对，够了。要冲精度再调 --train-size。
+关于默认数据子集：
+    本机为 CPU 环境（cuda.is_available() 为 False），全量 5 万张耗时过长。
+    默认取 8000 张训练、2000 张测试，足够验证四步实现是否正确；
+    需要更高精度时调大 --train-size。
 """
 
 import argparse
@@ -56,7 +47,7 @@ CLASSES = (
 
 # ────────────────────────────────────────────────────────────────
 # 1. 模型：一个小型 CNN
-#    刻意保持小 —— 能让 CPU 在几分钟内跑完，且结构一眼能看懂
+#    规模刻意保持小：CPU 上几分钟可跑完，结构也便于逐层核对
 # ────────────────────────────────────────────────────────────────
 class SmallCNN(nn.Module):
     def __init__(self, num_classes=10):
@@ -86,14 +77,14 @@ class SmallCNN(nn.Module):
 # 2. 数据
 # ────────────────────────────────────────────────────────────────
 def build_loaders(data_root, train_size, test_size, batch_size):
-    # 训练集做数据增强：随机翻转 + 随机裁切。这两条是 CIFAR 上最划算的增强。
+    # 训练集做数据增强：随机翻转 + 随机裁切
     train_tf = transforms.Compose([
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(32, padding=4),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
     ])
-    # 测试集不做增强：评估要可重复
+    # 测试集不做增强：评估需要可重复
     test_tf = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
@@ -117,10 +108,10 @@ def build_loaders(data_root, train_size, test_size, batch_size):
 
 # ────────────────────────────────────────────────────────────────
 # 3. 训练一轮 / 评估一次
-#    ★ 这两个函数是整个脚本的核心，四步就在 train_one_epoch 里
+#    四步的实现都在 train_one_epoch 里
 # ────────────────────────────────────────────────────────────────
 def train_one_epoch(model, loader, criterion, optimizer, device, epoch, total_epochs):
-    model.train()                    # 切到训练模式（Dropout 生效、BN 用当前 batch 统计）
+    model.train()                    # 训练模式：Dropout 生效、BN 用当前 batch 统计
     running_loss = 0.0
     correct = 0
     total = 0
@@ -129,23 +120,23 @@ def train_one_epoch(model, loader, criterion, optimizer, device, epoch, total_ep
         images, labels = images.to(device), labels.to(device)
 
         # ── 第 0 步：清空上一轮的梯度 ──────────────────────────
-        # 不清空的话，梯度会累加，这一轮就白算了
+        # 不清空则梯度会累加，本轮更新会偏离
         optimizer.zero_grad()
 
         # ── 第 1 步：前向 forward ─────────────────────────────
-        # 把图片送进网络，得到 10 个类别的打分（还没变成概率）
+        # 图片送入网络，得到 10 个类别的打分（尚未归一化为概率）
         logits = model(images)
 
         # ── 第 2 步：算损失 loss ─────────────────────────────
-        # 交叉熵 ≈ "打分和正确答案差多远"。模型就是要把这个数压小。
+        # 交叉熵衡量打分与真实标签的差距，训练目标即最小化该值
         loss = criterion(logits, labels)
 
         # ── 第 3 步：反向传播 backward ────────────────────────
-        # 自动求导算出"每个参数该往哪个方向调、调多少"
+        # 自动求导计算每个参数的梯度方向与大小
         loss.backward()
 
         # ── 第 4 步：更新参数 step ───────────────────────────
-        # 按上面算出的方向，真正改动权重
+        # 按梯度方向真正修改权重
         optimizer.step()
 
         running_loss += loss.item() * images.size(0)
@@ -160,9 +151,9 @@ def train_one_epoch(model, loader, criterion, optimizer, device, epoch, total_ep
     return running_loss / total, 100.0 * correct / total
 
 
-@torch.no_grad()                     # 评估不需要梯度，关掉能省内存和时间
+@torch.no_grad()                     # 评估不需要梯度，关闭以省内存与时间
 def evaluate(model, loader, criterion, device):
-    model.eval()                     # 切到评估模式（Dropout 关闭、BN 用滑动平均）
+    model.eval()                     # 评估模式：Dropout 关闭、BN 用滑动平均
     running_loss = 0.0
     correct = 0
     total = 0
@@ -176,7 +167,7 @@ def evaluate(model, loader, criterion, device):
 
 
 # ────────────────────────────────────────────────────────────────
-# 4. ASCII loss 曲线（不装 matplotlib 也能看见趋势）
+# 4. ASCII loss 曲线（不依赖 matplotlib）
 # ────────────────────────────────────────────────────────────────
 def ascii_curve(values, width=48, height=10, title="val_loss"):
     if not values:
@@ -205,8 +196,8 @@ def main():
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--lr", type=float, default=1e-3)
-    ap.add_argument("--train-size", type=int, default=8000, help="用多少张训练图（全量 50000）")
-    ap.add_argument("--test-size", type=int, default=2000, help="用多少张测试图（全量 10000）")
+    ap.add_argument("--train-size", type=int, default=8000, help="训练图数量（全量 50000）")
+    ap.add_argument("--test-size", type=int, default=2000, help="测试图数量（全量 10000）")
     ap.add_argument("--data-root", default=None, help="数据缓存目录，默认本脚本同级的 data/")
     ap.add_argument("--out", default=None, help="产出目录，默认本脚本同级的 runs/")
     args = ap.parse_args()
@@ -218,7 +209,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("=" * 62)
-    print(f"设备      : {device}  （本机 CPU 版 torch，返回 False 是硬件定局）")
+    print(f"设备      : {device}")
     print(f"torch     : {torch.__version__}")
     print(f"轮数/子集 : {args.epochs} epoch / train {args.train_size} / test {args.test_size}")
     print(f"产出目录  : {out_dir}")
@@ -276,33 +267,18 @@ def main():
     print("\n" + curve)
     print(f"[曲线] {curve_txt}")
 
-    # ── 加载权重重新测试 ───────────────────────────────────────────
-    # 这一步不写，就等于没验证"保存"真的有效。很多人卡在这儿却不自知。
+    # ── 重新加载权重再测一遍，确认保存/加载链路可用 ────────────────
     print("\n[验证] 重新加载 model.pt 再测一遍...")
     fresh = SmallCNN().to(device)
     fresh.load_state_dict(torch.load(ckpt, map_location=device))
     re_loss, re_acc = evaluate(fresh, test_loader, criterion, device)
     print(f"[验证] 加载后 loss {re_loss:.4f}  acc {re_acc:.2f}%  "
-          f"（应与最后一轮 val 一致，差 0.00 就是对的）")
+          f"（应与最后一轮 val 一致）")
 
     # ── 随机猜测基线对照 ───────────────────────────────────────────
     random_acc = 100.0 / len(CLASSES)
-    print(f"\n[对照] 随机猜测 = {random_acc:.1f}%  →  你的模型 {re_acc:.2f}%  "
-          f"({'明显高于随机，达标' if re_acc > random_acc * 2 else '没拉开差距，看看 lr / epoch 够不够'})")
-
-    # ── 交周报要的四个数字，直接抄 ─────────────────────────────────
-    print("\n" + "=" * 62)
-    print("写进周报「可核查结果」的四件事：")
-    print(f"  1. 脚本      : W3-20261110/01-cifar10/train_cifar10.py")
-    print(f"  2. 最终准确率: {history[-1]['val_acc']:.2f}%（随机基线 {random_acc:.0f}%）")
-    print(f"  3. loss 记录 : {os.path.relpath(csv_path, os.path.dirname(here))}")
-    print(f"  4. 权重加载  : 重载后 acc {re_acc:.2f}%，与最后一轮一致 → 保存/加载可用")
-    print("=" * 62)
-    print("\n自测一下能不能讲清四步（讲不清就是没学会，不是跑完就完）：")
-    print("  forward  : 图片 → 网络 → 10 个分数")
-    print("  loss     : 分数 vs 正确答案 → 一个数，越小越好")
-    print("  backward : 自动算出每个参数该往哪调")
-    print("  step     : 按算出的方向真正改权重")
+    gap = "高于随机基线的 2 倍" if re_acc > random_acc * 2 else "未明显高于随机基线"
+    print(f"\n[对照] 随机猜测 = {random_acc:.1f}%  →  模型 {re_acc:.2f}%，{gap}")
     return 0
 
 
